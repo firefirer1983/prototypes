@@ -61,10 +61,10 @@ class Demuxer:
                             ch_.handle_read()
 
                         if mask_ & EVENT_WRITE and ch_.writable():
-                            print("writable")
                             ch_.handle_write()
+                            
                     except Exception as e:
-                        print("close channel!", str(e))
+                        print(str(e))
                         ch_.close()
                         self._selector.unregister(ch_.fileobj)
 

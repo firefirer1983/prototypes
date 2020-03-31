@@ -2,6 +2,7 @@ import os
 import abc
 import threading
 import socket
+from parser import HttpRequestParser
 
 READ_BUF_SIZE = 16
 WRITE_BUF_SIZE = 16
@@ -44,6 +45,60 @@ class UpStream:
 
     def writable(self):
         return True
+
+
+class UpStreamer:
+    def __init__(self, sock):
+        self._sock = sock
+        self._buf = bytearray()
+        self._get = 0
+        self._parser = None
+
+    def read(self, size):
+        if len(self._buf) > size:
+            read_, self._buf = self._buf[:size], self._buf[size:]
+            return read_
+
+    def write(self):
+        done_ = False
+        while True:
+            try:
+                read_ = self._sock.recv(16)
+            except BlockingIOError as e:
+                pass
+            except ConnectionResetError as e:
+                done_ = True
+            else:
+                if read_:
+                    parsed_ = self._parse(read_)
+                    if parsed_:
+                        print(parsed_)
+                        done_ = True
+                else:
+                    done_ = True
+
+            if done_:
+                break
+
+    def readable(self):
+        return bool(self._buf)
+
+    def writable(self):
+        return True
+
+    def _parse(self, data):
+        if not self._parser:
+            self._parser = HttpRequestParser().parser()
+            next(self._parser)
+
+        try:
+            self._parser.send(data)
+        except StopIteration as e:
+            header, body = e.value
+            print(header, body)
+            return e.value
+        else:
+            return None
 
 
 class DownStream:
@@ -94,10 +149,10 @@ class StreamingChannel(Channel):
     def __init__(self, sock):
         self._sock = sock
         self._sock.setblocking(False)
-        self._upstream = UpStream(self._sock)
+        self._parser = HttpRequestParser()
+        self._upstream = UpStreamer(self._sock)
         self._downstream = DownStream(self._sock)
         self._active = True
-        self._parser = None
 
     @property
     def fileobj(self):

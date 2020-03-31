@@ -1,9 +1,9 @@
-from .parser import HttpParser
+from .parser import HttpRequestParser
 
 
 class HttpSink:
     def __init__(self):
-        self._parser = HttpParser()
+        self._parser = HttpRequestParser()
         self._upstream = None
         self._downstream = None
 
