@@ -72,7 +72,6 @@ class UpStreamer:
                 if read_:
                     parsed_ = self._parse(read_)
                     if parsed_:
-                        print(parsed_)
                         done_ = True
                 else:
                     done_ = True
@@ -95,7 +94,6 @@ class UpStreamer:
             self._parser.send(data)
         except StopIteration as e:
             header, body = e.value
-            print(header, body)
             return e.value
         else:
             return None
