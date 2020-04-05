@@ -1,3 +1,4 @@
+import abc
 import socket
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 
@@ -37,13 +38,9 @@ class Demuxer:
             self._trigger.fileobj, EVENT_READ, data=self._trigger
         )
 
-    def _create_channel(self) -> StreamingChannel:
-        client_, caddr_ = self._listener.accept()
-        client_.setblocking(False)
-        return StreamingChannel(client_)
-
-    def _attach_channel(self, ch):
-        self._selector.register(ch.fileobj, EVENT_READ | EVENT_WRITE, data=ch)
+    @abc.abstractmethod
+    def create_channel(self, client) -> StreamingChannel:
+        pass
 
     def demux(self):
         while True:
@@ -52,8 +49,12 @@ class Demuxer:
                 fileobj_, data_ = key_.fileobj, key_.data
 
                 if fileobj_ == self._listener.fileobj and mask_ & EVENT_READ:
-                    ch_ = self._create_channel()
-                    self._attach_channel(ch_)
+                    client_, caddr_ = self._listener.accept()
+                    client_.setblocking(False)
+                    ch_ = self.create_channel(client_)
+                    self._selector.register(
+                        ch_.fileobj, EVENT_READ | EVENT_WRITE, data=ch_
+                    )
                 else:
                     ch_ = data_
                     try:
@@ -62,14 +63,8 @@ class Demuxer:
 
                         if mask_ & EVENT_WRITE and ch_.writable():
                             ch_.handle_write()
-                            
+
                     except Exception as e:
                         print(str(e))
                         ch_.close()
                         self._selector.unregister(ch_.fileobj)
-
-
-if __name__ == "__main__":
-
-    demuxer = Demuxer(ListenEndPoint("127.0.0.1", 8003))
-    demuxer.demux()

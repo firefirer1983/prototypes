@@ -8,50 +8,12 @@ READ_BUF_SIZE = 16
 WRITE_BUF_SIZE = 16
 
 
-class UpStream:
-    def __init__(self, sock):
-        self._sock = sock
-        self._buf = bytearray()
-        self._get = 0
-
-    def read(self, size):
-        if len(self._buf) > size:
-            read_, self._buf = self._buf[:size], self._buf[size:]
-            return read_
-
-    def write(self):
-        done_ = False
-        while True:
-            try:
-                read_ = self._sock.recv(16)
-            except BlockingIOError as e:
-                pass
-            except ConnectionResetError as e:
-                done_ = True
-                self._buf.clear()
-            else:
-                if read_:
-                    self._buf.extend(read_)
-                    if read_.find(b"\r\n\r\n") > -1:
-                        done_ = True
-                else:
-                    done_ = True
-
-            if done_:
-                break
-
-    def readable(self):
-        return bool(self._buf)
-
-    def writable(self):
-        return True
-
-
 class UpStreamer:
-    def __init__(self, sock):
+    def __init__(self, sock, parser_factory):
         self._sock = sock
         self._buf = bytearray()
         self._get = 0
+        self._parser_factory = parser_factory
         self._parser = None
 
     def read(self, size):
@@ -60,23 +22,23 @@ class UpStreamer:
             return read_
 
     def write(self):
-        done_ = False
+        terminated_ = False
         while True:
             try:
                 read_ = self._sock.recv(16)
             except BlockingIOError as e:
                 pass
             except ConnectionResetError as e:
-                done_ = True
+                terminated_ = True
             else:
                 if read_:
-                    parsed_ = self._parse(read_)
-                    if parsed_:
-                        done_ = True
+                    done_ = self._parse(read_)
+                    if done_:
+                        return done_
                 else:
-                    done_ = True
+                    terminated_ = True
 
-            if done_:
+            if terminated_:
                 break
 
     def readable(self):
@@ -87,7 +49,7 @@ class UpStreamer:
 
     def _parse(self, data):
         if not self._parser:
-            self._parser = HttpRequestParser().parser()
+            self._parser = self._parser_factory.parser()
             next(self._parser)
 
         try:
@@ -99,7 +61,7 @@ class UpStreamer:
             return None
 
 
-class DownStream:
+class DownStreamer:
     def __init__(self, sock):
         self._sock = sock
         self._buf = bytearray(
@@ -144,12 +106,13 @@ class Channel:
 
 
 class StreamingChannel(Channel):
-    def __init__(self, sock):
+    def __init__(self, sock, parser_factory, sink):
         self._sock = sock
         self._sock.setblocking(False)
-        self._parser = HttpRequestParser()
-        self._upstream = UpStreamer(self._sock)
-        self._downstream = DownStream(self._sock)
+        self._parser_factory = parser_factory
+        self._upstream = UpStreamer(self._sock, self._parser_factory)
+        self._downstream = DownStreamer(self._sock)
+        self._sink = sink
         self._active = True
 
     @property
@@ -157,12 +120,12 @@ class StreamingChannel(Channel):
         return self._sock
 
     def handle_read(self):
-        if self._upstream:
-            self._upstream.write()
+        req_ = self._upstream.write()
+        if req_:
+            self._sink.process(*req_)
 
     def handle_write(self):
-        if self._downstream:
-            self._downstream.read()
+        self._downstream.read()
 
     def is_active(self):
         return self._active
@@ -170,14 +133,15 @@ class StreamingChannel(Channel):
     def close(self):
         self._sock.close()
 
-    def connect2sink(self, sink):
-        sink.connect(self._upstream, self._downstream)
-
     def readable(self):
         return self._upstream.writable()
 
     def writable(self):
         return self._downstream.readable()
+
+    @property
+    def downstream(self):
+        return self._downstream
 
 
 class AsyncFileWrapper:

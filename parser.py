@@ -1,6 +1,8 @@
 import re
+import traceback
+import sys
 
-HTTP_HDR_SEP = b"\r\n"
+HTTP_HDR_SEP = "\r\n"
 HTTP_HDR_END = b"\r\n\r\n"
 HTTP_HDR_END_LEN = len(HTTP_HDR_END)
 
@@ -29,25 +31,23 @@ class HttpRequestParser:
         self._http_version = None
         self._http_method = None
 
-    def __iter__(self):
-        return self
-
     def parser(self):
         header_, body_ = yield from self._receive_header()
+        print("recved:", header_, body_)
         try:
             header_ = self._parse_header(header_)
         except Exception as e:
             print(str(e))
+            traceback.print_exc(sys.stdout)
         content_length_ = int(header_.get("Content-Length"))
         body_ = yield from self._receive_body(body_, content_length_)
         try:
             body_ = self._parse_body(body_)
         except Exception as e:
             print(str(e))
+            traceback.print_exc(sys.stdout)
 
         return header_, body_
-
-    __next__ = parser
 
     @staticmethod
     def _receive_header():
@@ -73,22 +73,24 @@ class HttpRequestParser:
 
     def _parse_header(self, buf):
         header_dict_ = {}
+        buf = buf.decode("utf8")
         first_line, left = buf.split(HTTP_HDR_SEP, 1)
         bits = first_line.split(None, 2)
-        
+
         if len(bits) != 3:
             raise InvalidRequestLine(first_line)
-        
+
         if not METHOD_RE.match(bits[0]):
             raise InvalidRequestLine("invalid method:%s" % bits[0])
-        
+
         self._http_method = bits[0].upper()
         self._url = bits[1]
-        
 
         for line in left.split(HTTP_HDR_SEP):
-            k, v = line.split(b":", 1)
-            header_dict_[k.strip().decode("utf8")] = v.strip().decode("utf8")
+            k, v = [p.strip() for p in line.split(":", 1)]
+            header_dict_[k] = v
+        for k, v in header_dict_.items():
+            print("%s:%s" % (k, v))
         return header_dict_
 
     @staticmethod
