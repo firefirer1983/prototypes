@@ -7,13 +7,20 @@ class HttpResponseBuilder(MutableMapping):
         self._stream = stream
         self._rsp_header = dict()
         self._req_header = req_header
+        self._status = "200 OK"
         if self._req_header.get("VERSION", "") not in ("1.0", "1.1"):
             self._http_version = "1.0"
         else:
             self._http_version = self._req_header["VERSION"]
 
     def build(self):
-        pass
+        first_line_ = "HTTP/%s %s" % (self._http_version, self._status)
+        left_lines = ["%s: %s" % (k, self[k]) for k in sorted(self)]
+        lines = [first_line_] + left_lines
+        return ("%s\r\n\r\n" % "\r\n".join(lines)).encode("utf8")
+
+    def set_status(self, status):
+        self._status = status
 
     def set_content_length(self, length):
         self._rsp_header["Content-Length"] = length
@@ -61,3 +68,4 @@ if __name__ == "__main__":
     print(builder["Test"])
     for k, v in builder.items():
         print(k, v)
+    print(builder.build())
