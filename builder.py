@@ -19,6 +19,14 @@ class HttpResponseBuilder(MutableMapping):
         lines = [first_line_] + left_lines
         return ("%s\r\n\r\n" % "\r\n".join(lines)).encode("utf8")
 
+    @property
+    def has_body(self):
+        return not (
+            self._status.startswith("1")
+            or self._status.startswith("204")
+            or self._status.startswith("304")
+        )
+
     def set_status(self, status):
         self._status = status
 
@@ -45,17 +53,21 @@ class HttpResponseBuilder(MutableMapping):
                 # if self.content_length is
                 pass
 
+    @staticmethod
+    def _format_header_key(key):
+        return "-".join([k.lower().capitalize() for k in key.split("-", 1)])
+
     def __setitem__(self, key, value):
-        self._rsp_header.__setitem__(key, value)
+        self._rsp_header.__setitem__(self._format_header_key(key), value)
 
     def __getitem__(self, item):
-        return self._rsp_header.__getitem__(item)
+        return self._rsp_header.__getitem__(self._format_header_key(item))
 
     def __iter__(self):
         return self._rsp_header.__iter__()
 
     def __delitem__(self, key):
-        return self._rsp_header.__delitem__(key)
+        return self._rsp_header.__delitem__(self._format_header_key(key))
 
     def __len__(self):
         return self._rsp_header.__len__()
@@ -65,6 +77,7 @@ if __name__ == "__main__":
     builder = HttpResponseBuilder(None, {})
     builder["Test"] = "Test"
     builder["Hi"] = "Hi"
+    builder["conTent-leNgth"] = "123"
     print(builder["Test"])
     for k, v in builder.items():
         print(k, v)
