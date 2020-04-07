@@ -3,21 +3,21 @@ from collections.abc import MutableMapping
 
 
 class HttpResponseBuilder(MutableMapping):
-    def __init__(self, stream, req_header):
+    def __init__(self, stream, request_message):
         self._stream = stream
         self._rsp_header = dict()
-        self._req_header = req_header
         self._status = "200 OK"
-        if self._req_header.get("VERSION", "") not in ("1.0", "1.1"):
+        self._request_msg = request_message
+        if self._request_msg.version not in ("1.0", "1.1"):
             self._http_version = "1.0"
         else:
-            self._http_version = self._req_header["VERSION"]
+            self._http_version = self._request_msg.version
 
     def build(self):
-        first_line_ = "HTTP/%s %s" % (self._http_version, self._status)
-        left_lines = ["%s: %s" % (k, self[k]) for k in sorted(self)]
-        lines = [first_line_] + left_lines
-        return ("%s\r\n\r\n" % "\r\n".join(lines)).encode("utf8")
+        startup_line_ = "HTTP/%s %s" % (self._http_version, self._status)
+        headers_ = ["%s: %s" % (k, self[k]) for k in sorted(self)]
+        message_ = [startup_line_] + headers_
+        return ("%s\r\n\r\n" % "\r\n".join(message_)).encode("utf8")
 
     @property
     def has_body(self):
