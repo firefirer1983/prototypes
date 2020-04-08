@@ -55,7 +55,6 @@ class UpStreamer:
         try:
             self._parser.send(data)
         except StopIteration as e:
-            header, body = e.value
             return e.value
         else:
             return None
@@ -122,7 +121,7 @@ class StreamingChannel(Channel):
     def handle_read(self):
         req_ = self._upstream.write()
         if req_:
-            self._sink.process(*req_)
+            self._sink.process(req_, self)
 
     def handle_write(self):
         self._downstream.read()

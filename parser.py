@@ -1,6 +1,8 @@
+from collections.abc import MutableMapping
 import re
 import traceback
 import sys
+
 
 HTTP_HDR_SEP = "\r\n"
 HTTP_HDR_END = b"\r\n\r\n"
@@ -26,28 +28,92 @@ class InvalidChunkSize(Exception):
     """ error raised when we parse an invalid chunk size """
 
 
+class HttpRequest(MutableMapping):
+    def __init__(self):
+        self._headers = {}
+        self._version = "1.0"
+        self._method = None
+        self._request_url = None
+        self._body = None
+
+    @property
+    def version(self):
+        return self._version
+
+    def set_version(self, v):
+        self._version = v.strip()
+
+    @property
+    def method(self):
+        return self._method
+
+    def set_method(self, v):
+        self._method = v.strip()
+
+    @property
+    def request_url(self):
+        return self._request_url
+
+    @property
+    def content_length(self):
+        return int(self._headers.get("Content-Length"))
+
+    def set_request_url(self, v):
+        self._request_url = v.strip()
+
+    def __setitem__(self, key, value):
+        return self._headers.__setitem__(key, value)
+
+    def __getitem__(self, item):
+        return self._headers.__getitem__(item)
+
+    def __iter__(self):
+        return self._headers.__iter__()
+
+    def __delitem__(self, key):
+        return self._headers.__delitem__(key)
+    
+    def __len__(self):
+        return self._headers.__len__()
+    
+    def set_body(self, body):
+        self._body = body
+
+    @property
+    def body(self):
+        return self._body
+
+
 class HttpRequestParser:
     def __init__(self):
-        self._http_version = None
-        self._http_method = None
+        pass
 
     def parser(self):
-        header_, body_ = yield from self._receive_header()
-        print("recved:", header_, body_)
+        request_ = HttpRequest()
+        headers_, partial_body_ = yield from self._receive_header()
+        print("recved:", headers_, partial_body_)
         try:
-            header_ = self._parse_header(header_)
+            method_, request_url_, headers_ = self._parse_header(headers_)
         except Exception as e:
             print(str(e))
             traceback.print_exc(sys.stdout)
-        content_length_ = int(header_.get("Content-Length"))
-        body_ = yield from self._receive_body(body_, content_length_)
+            raise
+
+        request_.set_method(method_)
+        request_.set_request_url(request_url_)
+        request_.update(headers_)
+        
+        body_ = yield from self._receive_body(
+            partial_body_, request_.content_length
+        )
         try:
             body_ = self._parse_body(body_)
         except Exception as e:
             print(str(e))
             traceback.print_exc(sys.stdout)
-
-        return header_, body_
+            raise
+        request_.set_body(body_)
+        return request_
 
     @staticmethod
     def _receive_header():
@@ -71,8 +137,8 @@ class HttpRequestParser:
             if len(buf) >= content_length > 0:
                 return buf[:content_length]
 
-    def _parse_header(self, buf):
-        header_dict_ = {}
+    @staticmethod
+    def _parse_header(buf):
         buf = buf.decode("utf8")
         first_line, left = buf.split(HTTP_HDR_SEP, 1)
         bits = first_line.split(None, 2)
@@ -83,15 +149,14 @@ class HttpRequestParser:
         if not METHOD_RE.match(bits[0]):
             raise InvalidRequestLine("invalid method:%s" % bits[0])
 
-        self._http_method = bits[0].upper()
-        self._url = bits[1]
+        method_ = bits[0].upper()
+        request_url_ = bits[1]
 
+        headers_ = dict()
         for line in left.split(HTTP_HDR_SEP):
             k, v = [p.strip() for p in line.split(":", 1)]
-            header_dict_[k] = v
-        for k, v in header_dict_.items():
-            print("%s:%s" % (k, v))
-        return header_dict_
+            headers_[k] = v
+        return method_, request_url_, headers_
 
     @staticmethod
     def _parse_body(buf):

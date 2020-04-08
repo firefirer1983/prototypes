@@ -14,9 +14,9 @@ class HttpResponseBuilder(MutableMapping):
             self._http_version = self._request_msg.version
 
     def build(self):
-        startup_line_ = "HTTP/%s %s" % (self._http_version, self._status)
+        start_line_ = "HTTP/%s %s" % (self._http_version, self._status)
         headers_ = ["%s: %s" % (k, self[k]) for k in sorted(self)]
-        message_ = [startup_line_] + headers_
+        message_ = [start_line_] + headers_
         return ("%s\r\n\r\n" % "\r\n".join(message_)).encode("utf8")
 
     @property
