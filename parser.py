@@ -56,7 +56,7 @@ class HttpRequest(MutableMapping):
 
     @property
     def content_length(self):
-        return int(self._headers.get("Content-Length"))
+        return int(self._headers.get("Content-Length", 0))
 
     def set_request_url(self, v):
         self._request_url = v.strip()
@@ -72,10 +72,10 @@ class HttpRequest(MutableMapping):
 
     def __delitem__(self, key):
         return self._headers.__delitem__(key)
-    
+
     def __len__(self):
         return self._headers.__len__()
-    
+
     def set_body(self, body):
         self._body = body
 
@@ -95,21 +95,19 @@ class HttpRequestParser:
         try:
             method_, request_url_, headers_ = self._parse_header(headers_)
         except Exception as e:
-            print(str(e))
             traceback.print_exc(sys.stdout)
             raise
 
         request_.set_method(method_)
         request_.set_request_url(request_url_)
         request_.update(headers_)
-        
+
         body_ = yield from self._receive_body(
             partial_body_, request_.content_length
         )
         try:
             body_ = self._parse_body(body_)
         except Exception as e:
-            print(str(e))
             traceback.print_exc(sys.stdout)
             raise
         request_.set_body(body_)

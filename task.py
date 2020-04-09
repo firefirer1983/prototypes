@@ -1,4 +1,6 @@
 import abc
+import sys
+import traceback
 from builder import HttpResponseBuilder
 
 
@@ -6,8 +8,14 @@ class Task(abc.ABC):
     def __init__(self):
         pass
 
-    @abc.abstractmethod
     def execute(self):
+        try:
+            self._execute()
+        except Exception as e:
+            traceback.print_exc(sys.stdout)
+
+    @abc.abstractmethod
+    def _execute(self):
         pass
 
 
@@ -39,7 +47,7 @@ class WSGITask(Task):
         self._wsgi_app = app
         self._rsp_builder = HttpResponseBuilder(stream)
 
-    def execute(self):
+    def _execute(self):
         self._wsgi_app(self._env, self._start_response)
 
     def _start_response(self, status, headers, exc_info=None):
